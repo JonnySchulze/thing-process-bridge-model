@@ -1,7 +1,6 @@
 from utils import get_name_from_url, escape_url
 from lxml import etree
 import requests
-import converter
 
 thing_description = {"@context": "http://www.w3.org/ns/td",
     "securityDefinitions": {"no_sec" : {"scheme":"nosec","in":"header"}},
@@ -15,56 +14,52 @@ def get_thing_description_from_tpbm(tpbm):
     return thing_description
 
 def add_endpoint(endpoint):
-    try:
-        if "name" in endpoint:
-            name = endpoint["name"]
+    if "name" in endpoint:
+        name = endpoint["name"]
+    else:
+        name = get_name_from_url(endpoint["url"])
+    if endpoint["profile"] in ["delete", "patch", "post"]:
+        if not "actions" in thing_description:
+            thing_description.update({"actions": {}})
+        if endpoint["profile"] == "delete":
+            idempotent = True
         else:
-            name = get_name_from_url(endpoint["url"])
-        if endpoint["profile"] in ["delete", "patch", "post"]:
-            if not "actions" in thing_description:
-                thing_description.update({"actions": {}})
-            if endpoint["profile"] == "delete":
-                idempotent = True
-            else:
-                idempotent = False
-            thing_description["actions"].update({name:{"safe":False,
-                "idempotent":idempotent, "forms":[{"href":endpoint["url"],"op":["invokeaction"],"contentType":"application/json",
-            "htv:methodName": endpoint["profile"].upper()}]}})
+            idempotent = False
+        thing_description["actions"].update({name:{"safe":False,
+            "idempotent":idempotent, "forms":[{"href":endpoint["url"],"op":["invokeaction"],"contentType":"application/json",
+        "htv:methodName": endpoint["profile"].upper()}]}})
 
-            thing_description["actions"][name].update(create_optionals(endpoint))
-            if "input" in endpoint and (isinstance(endpoint["input"], str) or isinstance(endpoint["input"], bool) and endpoint["input"]):
-                thing_description["actions"][name].update({"input": create_properties(endpoint)})
-            thing_description["actions"][name].update(create_optionals(endpoint))            
+        thing_description["actions"][name].update(create_optionals(endpoint))
+        if "input" in endpoint and (isinstance(endpoint["input"], str) or isinstance(endpoint["input"], bool) and endpoint["input"]):
+            thing_description["actions"][name].update({"input": create_properties(endpoint)})
+        thing_description["actions"][name].update(create_optionals(endpoint))            
 
-        elif endpoint["profile"] in ["get", "put", "get-put"]:
-            if not "properties" in thing_description:
-                thing_description.update({"properties": {}})
-            thing_description["properties"].update({name:{ "forms": []}})
-            if endpoint["profile"] == "get":
-                readonly, writeonly = True, False
-                property = ["readproperty"]
-            elif endpoint["profile"] == "put":
-                readonly, writeonly = False, True
-                property = ["writeproperty"]
-            else:
-                readonly, writeonly = False, False
-                property = ["readproperty", "writeproperty"]
-            thing_description["properties"][name].update({"readOnly": readonly, "writeOnly": writeonly})
-            thing_description["properties"][name]["forms"].append({"href": endpoint["url"],
-                "op": property, "contentType": "application/json"})
+    elif endpoint["profile"] in ["get", "put", "get-put"]:
+        if not "properties" in thing_description:
+            thing_description.update({"properties": {}})
+        thing_description["properties"].update({name:{ "forms": []}})
+        if endpoint["profile"] == "get":
+            readonly, writeonly = True, False
+            property = ["readproperty"]
+        elif endpoint["profile"] == "put":
+            readonly, writeonly = False, True
+            property = ["writeproperty"]
+        else:
+            readonly, writeonly = False, False
+            property = ["readproperty", "writeproperty"]
+        thing_description["properties"][name].update({"readOnly": readonly, "writeOnly": writeonly})
+        thing_description["properties"][name]["forms"].append({"href": endpoint["url"],
+            "op": property, "contentType": "application/json"})
 
-            thing_description["properties"][name].update(create_properties(endpoint))
-            thing_description["properties"][name].update(create_optionals(endpoint))
-            
+        thing_description["properties"][name].update(create_properties(endpoint))
+        thing_description["properties"][name].update(create_optionals(endpoint))
+        
 
-        elif endpoint["profile"] == "symbolic":
-            if not "symbolic" in thing_description:
-                thing_description.update({"symbolic": {}})
-            thing_description["symbolic"].update({name: {}})
-            thing_description["symbolic"][endpoint["url"]].update(create_optionals(endpoint))
-
-    except ValueError:
-        print("Key error")
+    elif endpoint["profile"] == "symbolic":
+        if not "symbolic" in thing_description:
+            thing_description.update({"symbolic": {}})
+        thing_description["symbolic"].update({name: {}})
+        thing_description["symbolic"][endpoint["url"]].update(create_optionals(endpoint))
 
 def create_optionals(endpoint):
     optionals = {}
@@ -97,8 +92,12 @@ def create_properties(endpoint):
         
         tree = etree.fromstring(requests.get(url).text)
         properties = {}
-        for element in tree:
-            properties.update(converter.create_property(element))
+        print(tree.getchildren()[0].tag)
+        if tree.getchildren()[0].tag == "{http://relaxng.org/ns/structure/1.0}element":
+            for element in tree:
+                properties.update(create_property(element))
+        else:
+            properties.update(create_property(tree))
 
         if len(properties.keys()) > 1:
             properties = {"type": "object", "properties": properties}
