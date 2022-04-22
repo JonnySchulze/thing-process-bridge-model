@@ -48,6 +48,8 @@ def add_endpoint(endpoint):
             readonly, writeonly = False, False
             property = ["readproperty", "writeproperty"]
         thing_description["properties"][name].update({"readOnly": readonly, "writeOnly": writeonly})
+        # Placeholder
+        thing_description["properties"][name].update({"observable": False})
         thing_description["properties"][name]["forms"].append({"href": endpoint["url"],
             "op": property, "contentType": "application/json"})
 
@@ -92,7 +94,6 @@ def create_properties(endpoint):
         
         tree = etree.fromstring(requests.get(url).text)
         properties = {}
-        print(tree.getchildren()[0].tag)
         if tree.getchildren()[0].tag == "{http://relaxng.org/ns/structure/1.0}element":
             for element in tree:
                 properties.update(create_property(element))
