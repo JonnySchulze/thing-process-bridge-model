@@ -2,18 +2,30 @@ from utils import get_name_from_url, escape_url
 from lxml import etree
 import requests
 
-thing_description = {"@context": "http://www.w3.org/ns/td",
+thing_descriptions = []
+default_thing_description = {"@context": "http://www.w3.org/ns/td",
     "securityDefinitions": {"no_sec" : {"scheme":"nosec","in":"header"}},
     "security":"no_sec"}
 
-def get_thing_description_from_tpbm(tpbm):
-    thing_description.update({"title":tpbm["title"],
-    "id":"test:test-"+str(tpbm["id"])})
-    for endpoint in tpbm["endpoints"]:
-        add_endpoint(endpoint)
-    return thing_description
+def get_thing_descriptions_from_tpbm(tpbm):
+    iterate_tpbm(tpbm["endpoints"], tpbm["title"])
+    return thing_descriptions
 
-def add_endpoint(endpoint):
+def iterate_tpbm(input, id):
+    if isinstance(input, dict):
+        for key, value in input.items():
+            if id:
+                iterate_tpbm(value, id+":"+key)
+            else:
+                iterate_tpbm(value, key)
+    elif isinstance(input, list):
+        thing_description = default_thing_description
+        thing_description.update({"id": id})
+        for endpoint in input:
+            thing_description = add_endpoint(endpoint, thing_description)
+        thing_descriptions.append(thing_description)
+
+def add_endpoint(endpoint, thing_description):
     if "name" in endpoint:
         name = endpoint["name"]
     else:
@@ -62,6 +74,8 @@ def add_endpoint(endpoint):
             thing_description.update({"symbolic": {}})
         thing_description["symbolic"].update({name: {}})
         thing_description["symbolic"][endpoint["url"]].update(create_optionals(endpoint))
+
+    return thing_description
 
 def create_optionals(endpoint):
     optionals = {}

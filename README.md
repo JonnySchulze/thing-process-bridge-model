@@ -32,18 +32,18 @@ After having navigated to the src subdirectory, run the flask app with `flask ru
 |Attribute|Assignment|Type|Description|
 |-|-|-|-|
 |title|mandatory|string|The name of the TPBM<mark>, to be transferred to the generated Thing Description</mark>|
-|endpoints|optional*|Array of EndpointModel|The endpoints listed in the TPBM.<br/><mark>*If only a single endpoint is to be noted, it can be indicated without the Array</mark>|
+|endpoints|mandatory|Array of EndpointModel|The endpoints listed in the TPBM.|
 #### EndpointModel
 |Attribute|Assignment|Type|Description|
 |-|-|-|-|
-|name|<mark>optional, yet recommended</mark>|string|The name of the endpoint. If not indicated, it is generated from the last part of the url|
+|name|optional, yet recommended|string|The name of the endpoint. If not indicated, it is generated from the last part of the url|
 |url|mandatory|string|Location of the task in the task repository|
 |profile|mandatory|enum (one of delete, get, patch, post, put, get-put, symbolic, none)|HTTP request method or special behavior profile (get-put, symbolic, none; explanation below) used for the endpoint|
 |input|optional|boolean or string|Indicates the presence of the default CPEE icon file (symbol.svg) or a customized file name to be used|
 |icon|optional|boolean or string|Indicates the presence of the default CPEE icon file (symbol.svg) or a customized file name to be used|
-|output|optional|<mark>any</mark>|Indicates the output produced by the endpoint|
-|event|optional|boolean|<mark>Indicates the presence on an event caused by the endpoint</mark>|
-|misc|optional|<mark>any(?)</mark>|Option for miscellaneous information to be included in the Thing Description|
+|output|optional|any|Indicates the output produced by the endpoint|
+|event|optional|boolean|Indicates the presence on an event caused by the endpoint|
+|misc|optional|any|Option for miscellaneous information to be included in the Thing Description|
 
 
 

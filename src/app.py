@@ -66,5 +66,5 @@ def get_tpbm(id):
 def convert_tpbm(id):
     for tpbm in tpbms:
         if str(tpbm["id"])==id:
-            return jsonify(converter.get_thing_description_from_tpbm(tpbm))
+            return jsonify(converter.get_thing_descriptions_from_tpbm(tpbm)[0])
     return "Not found", 404

@@ -3,16 +3,29 @@ from utils import get_name_from_url
 def check(tpbm):
     result = "Syntax Check Result:"
     if not "title" in tpbm:
-        result += "\ntitle field is required"
+        result += "\nERROR: title field is required"
 
     if not "endpoints" in tpbm:
-        check_endpoint(tpbm, False)
+        result += "\nERROR: endpoints field is required"
     else:
-        for endpoint in tpbm["endpoints"]:
-            endpoint_result = check_endpoint(endpoint)
-            if endpoint_result:
-                result += endpoint_result + "\n\n"
-    
+        result += iterate_tpbm(tpbm["endpoints"], tpbm["title"]) 
+    return result
+
+def iterate_tpbm(input, id):
+    result = ""
+    if isinstance(input, dict):
+        for key, value in input.items():
+            if id:
+                result += iterate_tpbm(value, id+":"+key)
+            else:
+                result += iterate_tpbm(value, key)
+        if result:
+            result += "\n\n"
+    elif isinstance(input, list):
+        for endpoint in input:
+            result += check_endpoint(endpoint)
+        if result:
+            result = "Subdirectory " + id + " results:\n"
     return result
 
 def check_endpoint(tpbm_endpoint):
