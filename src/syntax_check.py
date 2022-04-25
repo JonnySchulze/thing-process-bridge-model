@@ -8,7 +8,7 @@ def check(tpbm):
     if not "endpoints" in tpbm:
         result += "\nERROR: endpoints field is required"
     else:
-        result += iterate_tpbm(tpbm["endpoints"], tpbm["title"]) 
+        result += iterate_tpbm(tpbm["endpoints"], tpbm["title"])
     return result
 
 def iterate_tpbm(input, id):
@@ -25,7 +25,9 @@ def iterate_tpbm(input, id):
         for endpoint in input:
             result += check_endpoint(endpoint)
         if result:
-            result = "Subdirectory " + id + " results:\n"
+            result = "\nSubdirectory " + id + " results:" + result
+    else:
+        result += "\nERROR: Subdirectory " + id + ": Invalid syntax"
     return result
 
 def check_endpoint(tpbm_endpoint):
@@ -37,7 +39,7 @@ def check_endpoint(tpbm_endpoint):
         response += "\nERROR: The endpoint name has to be of string type"
     elif not "name" in tpbm_endpoint and "url" in tpbm_endpoint and isinstance(tpbm_endpoint["url"], str):
         name = get_name_from_url(tpbm_endpoint["url"])
-        response += "\WARNING: No endpoint name was indicated. The endpoint point name will thus be derived from the url and will be " + name
+        response += "\nWARNING: No endpoint name was indicated. The endpoint point name will thus be derived from the url and will be " + name
     if name:
         name += ": "
 
