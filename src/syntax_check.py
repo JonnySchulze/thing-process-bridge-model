@@ -1,4 +1,4 @@
-from utils import get_name_from_url
+from src.utils import get_name_from_url
 
 def check(tpbm):
     result = "Syntax Check Result:"

@@ -1,4 +1,4 @@
-from utils import get_name_from_url, escape_url
+from src.utils import get_name_from_url, escape_url
 from lxml import etree
 import requests
 from copy import deepcopy

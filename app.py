@@ -1,9 +1,8 @@
 from flask import Flask, request, jsonify
-import converter
-from syntax_check import check
+from src.converter import get_thing_descriptions_from_tpbm
+from src.syntax_check import check
 
 app = Flask(__name__)
-app.config['DEBUG'] = True
 
 tpbms = []
 thing_descriptions = []
@@ -66,7 +65,7 @@ def get_tpbm(id):
 def convert_tpbm(id, path):
     for tpbm in tpbms:
         if str(tpbm["id"])==id:
-            tds = converter.get_thing_descriptions_from_tpbm(tpbm)
+            tds = get_thing_descriptions_from_tpbm(tpbm)
             for td in tds:
                 if td["id"] == path:
                     return jsonify(td)
