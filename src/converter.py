@@ -1,6 +1,7 @@
 from utils import get_name_from_url, escape_url
 from lxml import etree
 import requests
+from copy import deepcopy
 
 thing_descriptions = []
 default_thing_description = {"@context": "http://www.w3.org/ns/td",
@@ -19,7 +20,7 @@ def iterate_tpbm(input, id):
             else:
                 iterate_tpbm(value, key)
     elif isinstance(input, list):
-        thing_description = default_thing_description
+        thing_description = deepcopy(default_thing_description)
         thing_description.update({"id": id})
         for endpoint in input:
             thing_description = add_endpoint(endpoint, thing_description)
@@ -93,7 +94,6 @@ def create_optionals(endpoint):
 
     if "misc" in endpoint:
         optionals.update({"misc": endpoint["misc"]})
-    print(optionals)
     return optionals
 
 def create_properties(endpoint):

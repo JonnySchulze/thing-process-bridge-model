@@ -62,9 +62,13 @@ def get_tpbm(id):
             return jsonify(tpbm)
     return "Not found", 404
 
-@app.route('/tpbms/<id>/thing_description')
-def convert_tpbm(id):
+@app.route('/tpbms/<id>/thing_description/<path>')
+def convert_tpbm(id, path):
     for tpbm in tpbms:
         if str(tpbm["id"])==id:
-            return jsonify(converter.get_thing_descriptions_from_tpbm(tpbm)[0])
-    return "Not found", 404
+            tds = converter.get_thing_descriptions_from_tpbm(tpbm)
+            for td in tds:
+                if td["id"] == path:
+                    return jsonify(td)
+    else:
+        return "Not found", 404

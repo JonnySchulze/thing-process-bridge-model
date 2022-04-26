@@ -10,6 +10,7 @@ Endpoints (mainly consisting of a URL and an HTTP request method) are used to ac
 
 - Python 10+
 	- External libaries:
+		- copy
 		- flask
 		- lxml
 		- requests
