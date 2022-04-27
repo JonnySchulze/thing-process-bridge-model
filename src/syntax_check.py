@@ -23,7 +23,10 @@ def iterate_tpbm(input, id):
             result += "\n\n"
     elif isinstance(input, list):
         for endpoint in input:
-            result += check_endpoint(endpoint)
+            if not isinstance(endpoint, dict):
+                result += "\nInvalid syntax: Within an array, endpoints must be defined as objects"
+            else:
+                result += check_endpoint(endpoint)
         if result:
             result = "\nSubdirectory " + id + " results:" + result
     else:

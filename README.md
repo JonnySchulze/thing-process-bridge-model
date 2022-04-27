@@ -17,7 +17,7 @@ Endpoints (mainly consisting of a URL and an HTTP request method) are used to ac
 
 ## How to run
 
-After having navigated to the src subdirectory, run the flask app with `flask run`. Communicate with the locally running API using correspondend API calls:
+Run the flask app with `flask run`. Communicate with the locally running API using correspondend API calls:
 
 ### Post a Thing Process Bridge Model:
 
