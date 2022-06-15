@@ -1,4 +1,4 @@
-from src.utils import get_name_from_url, escape_url
+from src.utils import escape_url
 from lxml import etree
 import requests
 from copy import deepcopy
@@ -27,54 +27,22 @@ def iterate_tpbm(input, id):
         thing_descriptions.append(thing_description)
 
 def add_endpoint(endpoint, thing_description):
-    if "name" in endpoint:
-        name = endpoint["name"]
-    else:
-        name = get_name_from_url(endpoint["url"])
-    if endpoint["profile"] in ["delete", "patch", "post"]:
+    name = endpoint["name"]
+    if endpoint["profile"] in ["delete", "get", "patch", "post", "put", "none", "symbolic"]:
         if not "actions" in thing_description:
             thing_description.update({"actions": {}})
-        if endpoint["profile"] == "delete":
-            idempotent = True
-        else:
-            idempotent = False
-        thing_description["actions"].update({name:{"safe":False,
-            "idempotent":idempotent, "forms":[{"href":endpoint["url"],"op":["invokeaction"],"contentType":"application/json",
-        "htv:methodName": endpoint["profile"].upper()}]}})
+        idempotent = endpoint["profile"] in ["delete", "get", "put", "symbolic"]
+        safe = endpoint["profile"] in ["get", "symbolic"]
+        thing_description["actions"].update({name:{"safe":safe,
+            "idempotent":idempotent, "forms":[{"href":endpoint["url"],"op":["invokeaction"],"contentType":"application/json"}]}})
+        if not endpoint["profile"] in ["none", "symbolic"]:
+            thing_description["actions"][name]["forms"][0].update({"htv:methodName": endpoint["profile"].upper()})
 
         thing_description["actions"][name].update(create_optionals(endpoint))
-        if "input" in endpoint and (isinstance(endpoint["input"], str) or isinstance(endpoint["input"], bool) and endpoint["input"]):
-            thing_description["actions"][name].update({"input": create_properties(endpoint)})
-        thing_description["actions"][name].update(create_optionals(endpoint))            
-
-    elif endpoint["profile"] in ["get", "put", "get-put"]:
-        if not "properties" in thing_description:
-            thing_description.update({"properties": {}})
-        thing_description["properties"].update({name:{ "forms": []}})
-        if endpoint["profile"] == "get":
-            readonly, writeonly = True, False
-            property = ["readproperty"]
-        elif endpoint["profile"] == "put":
-            readonly, writeonly = False, True
-            property = ["writeproperty"]
-        else:
-            readonly, writeonly = False, False
-            property = ["readproperty", "writeproperty"]
-        thing_description["properties"][name].update({"readOnly": readonly, "writeOnly": writeonly})
-        # Placeholder
-        thing_description["properties"][name].update({"observable": False})
-        thing_description["properties"][name]["forms"].append({"href": endpoint["url"],
-            "op": property, "contentType": "application/json"})
-
-        thing_description["properties"][name].update(create_properties(endpoint))
-        thing_description["properties"][name].update(create_optionals(endpoint))
-        
-
-    elif endpoint["profile"] == "symbolic":
-        if not "symbolic" in thing_description:
-            thing_description.update({"symbolic": {}})
-        thing_description["symbolic"].update({name: {}})
-        thing_description["symbolic"][endpoint["url"]].update(create_optionals(endpoint))
+        if "input" in endpoint:
+            if isinstance(endpoint["input"], str) or isinstance(endpoint["input"], bool) and endpoint["input"]:
+                thing_description["actions"][name].update({"input": create_properties(endpoint)})
+        thing_description["actions"][name].update(create_optionals(endpoint))
 
     return thing_description
 
@@ -86,8 +54,18 @@ def create_optionals(endpoint):
         elif endpoint["icon"]:
             optionals.update({"icon": endpoint["symbol.svg"]})
 
-    if "output" in endpoint:
-        optionals.update({"output": endpoint["output"]})
+    if "input" in endpoint and isinstance(endpoint["input"], str):
+        if endpoint["input"] != "schema.rng":
+            optionals.update({"schema_name": endpoint["input"]})
+
+    if "output" in endpoint and endpoint["profile"] != "symbolic":
+        if isinstance(endpoint["output"], str):
+            optionals.update({"output": {"type": "string", "contentMediaType": endpoint["output"]}})
+        else:
+            optionals.update({"output": {"type": "object", "properties": {}}})
+            index = 0
+            while index < len(endpoint["output"]):
+                optionals["output"].update({"par"+str(index): {"type": "string", "contentMediaType": endpoint["output"][index]}})
 
     if "event" in endpoint and endpoint["event"]:
         optionals.update({"event": True})
@@ -161,7 +139,7 @@ def create_property(element):
                 enum.append(value.text)
             property[name].update({"type": "string", "enum": enum})
         elif type == relaxng_url+"zeroOrMore":
-            property[name].update({"type": "array", "items": {}, "minItems": 1})
+            property[name].update({"type": "array", "items": {}})
             if element.getchildren()[index].getchildren()[0].tag == relaxng_url+"element":
                 array_items = create_property(element.getchildren()[index].getchildren()[0])
                 property[name]["items"] = array_items
