@@ -3,28 +3,31 @@ from lxml import etree
 import requests
 from copy import deepcopy
 
-thing_descriptions = []
 default_thing_description = {"@context": "http://www.w3.org/ns/td",
     "securityDefinitions": {"no_sec" : {"scheme":"nosec","in":"header"}},
     "security":"no_sec"}
 
 def get_thing_descriptions_from_tpbm(tpbm):
-    iterate_tpbm(tpbm["endpoints"], tpbm["title"])
+    thing_descriptions = iterate_tpbm(list(tpbm.values())[0], list(tpbm.keys())[0])
+    if isinstance(thing_descriptions, dict):
+        thing_descriptions = [thing_descriptions]
     return thing_descriptions
 
 def iterate_tpbm(input, id):
     if isinstance(input, dict):
+        thing_descriptions = []
         for key, value in input.items():
             if id:
-                iterate_tpbm(value, id+":"+key)
+                thing_descriptions.append(iterate_tpbm(value, id+":"+key))
             else:
-                iterate_tpbm(value, key)
+                thing_descriptions.append(iterate_tpbm(value, key))
+        return thing_descriptions
     elif isinstance(input, list):
         thing_description = deepcopy(default_thing_description)
         thing_description.update({"id": id})
         for endpoint in input:
             thing_description = add_endpoint(endpoint, thing_description)
-        thing_descriptions.append(thing_description)
+        return thing_description
 
 def add_endpoint(endpoint, thing_description):
     name = endpoint["name"]

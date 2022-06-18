@@ -2,13 +2,12 @@ from src.utils import check_for_media_type
 
 def check(tpbm):
     result = "Syntax Check Result:"
-    if not "title" in tpbm:
-        result += "\nERROR: title field is required"
-
-    if not "endpoints" in tpbm:
-        result += "\nERROR: endpoints field is required"
+    if not isinstance(tpbm, dict):
+        result += "\nERROR: The top level of a TPBM must be an object"
+    elif len(list(tpbm.keys())) != 1:
+        result += "\nERROR: The top level of a TPBM must have a unique root"
     else:
-        result += iterate_tpbm(tpbm["endpoints"], tpbm["title"])
+        result += iterate_tpbm(list(tpbm.values())[0], list(tpbm.keys())[0])
     return result
 
 def iterate_tpbm(input, id):
@@ -41,7 +40,6 @@ def check_endpoint(tpbm_endpoint, previous_endpoint_names):
     name = ""
     if not "name" in tpbm_endpoint:
         response += "\nERROR: No endpoint name was indicated"
-        name = tpbm_endpoint["name"]
     elif "name" in tpbm_endpoint and not isinstance(tpbm_endpoint["name"], str):
         response += "\nERROR: The endpoint name has to be of string type"
     else:
