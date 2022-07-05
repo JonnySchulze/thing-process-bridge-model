@@ -1,4 +1,4 @@
-from src.utils import escape_url
+from src.utils import escape_url, typecast_default
 from lxml import etree
 import requests
 from copy import deepcopy
@@ -31,7 +31,7 @@ def iterate_tpbm(input, id):
 
 def add_endpoint(endpoint, thing_description):
     name = endpoint["name"]
-    if endpoint["profile"] in ["delete", "get", "patch", "post", "put", "none", "symbolic"]:
+    if not "async" in endpoint or not endpoint["async"]:
         if not "actions" in thing_description:
             thing_description.update({"actions": {}})
         idempotent = endpoint["profile"] in ["delete", "get", "put", "symbolic"]
@@ -41,11 +41,25 @@ def add_endpoint(endpoint, thing_description):
         if not endpoint["profile"] in ["none", "symbolic"]:
             thing_description["actions"][name]["forms"][0].update({"htv:methodName": endpoint["profile"].upper()})
 
-        thing_description["actions"][name].update(create_optionals(endpoint))
         if "input" in endpoint:
             if isinstance(endpoint["input"], str) or isinstance(endpoint["input"], bool) and endpoint["input"]:
-                thing_description["actions"][name].update({"input": create_properties(endpoint)})
+                thing_description["actions"][name].update({"input": create_input(endpoint)})
+        if "output" in endpoint and endpoint["profile"] != "symbolic":
+            thing_description["events"][name].update({"output": create_output(endpoint["output"])})
         thing_description["actions"][name].update(create_optionals(endpoint))
+
+    elif endpoint["async"]:
+        if not "events" in thing_description:
+            thing_description.update({"events": {}})
+        thing_description["events"].update({name:{"forms":[{"href":endpoint["url"],"op":["subscribeevent"],"contentType":"application/json"}]}})
+        if not endpoint["profile"] in ["none", "symbolic"]:
+            thing_description["events"][name]["forms"][0].update({"htv:methodName": endpoint["profile"].upper()})
+        if "input" in endpoint:
+            if isinstance(endpoint["input"], str) or isinstance(endpoint["input"], bool) and endpoint["input"]:
+                thing_description["events"][name].update({"subscription": create_input(endpoint)})
+        if "output" in endpoint and endpoint["profile"] != "symbolic":
+            thing_description["events"][name].update({"data": create_output(endpoint["output"])})
+        thing_description["events"][name].update(create_optionals(endpoint))
 
     return thing_description
 
@@ -55,111 +69,126 @@ def create_optionals(endpoint):
         if isinstance(endpoint["icon"], str):
             optionals.update({"icon": endpoint["icon"]})
         elif endpoint["icon"]:
-            optionals.update({"icon": endpoint["symbol.svg"]})
+            optionals.update({"icon": "symbol.svg"})
 
     if "input" in endpoint and isinstance(endpoint["input"], str):
         if endpoint["input"] != "schema.rng":
-            optionals.update({"schema_name": endpoint["input"]})
+            optionals.update({"schemaName": endpoint["input"]})
 
-    if "output" in endpoint and endpoint["profile"] != "symbolic":
-        if isinstance(endpoint["output"], str):
-            optionals.update({"output": {"type": "string", "contentMediaType": endpoint["output"]}})
-        else:
-            optionals.update({"output": {"type": "object", "properties": {}}})
-            index = 0
-            while index < len(endpoint["output"]):
-                optionals["output"].update({"par"+str(index): {"type": "string", "contentMediaType": endpoint["output"][index]}})
-
-    if "event" in endpoint and endpoint["event"]:
-        optionals.update({"event": True})
-
-    if "misc" in endpoint:
-        optionals.update({"misc": endpoint["misc"]})
+    if "miscFiles" in endpoint:
+        optionals.update({"miscFiles": endpoint["miscFiles"]})
     return optionals
 
-def create_properties(endpoint):
-    if not "input" in endpoint or isinstance(endpoint["input"], bool) and not endpoint["input"]:
-        return {"type": "string"}
+def create_output(output):
+    if isinstance(output, str):
+        return {"type": "string", "contentMediaType": output}
     else:
-        if isinstance(endpoint["input"], bool) and endpoint["input"]:
-            schema_url = "schema.rng"
-        elif isinstance(endpoint["input"], str):
-            schema_url = endpoint["input"]
-        url = "https://cpee.org/flow/resources/endpoints/"+escape_url(endpoint["url"], endpoint["profile"])+"/"+schema_url
-        
-        tree = etree.fromstring(requests.get(url).text)
-        properties = {}
-        if tree.getchildren()[0].tag == "{http://relaxng.org/ns/structure/1.0}element":
-            for element in tree:
-                properties.update(create_property(element))
-        else:
-            properties.update(create_property(tree))
+        td_output = {"type": "object", "properties": {}}
+        index = 0
+        while index < len(output):
+            td_output["properties"].update({"par"+str(index): {"type": "string", "contentMediaType": output[index]}})
+            index += 1
+        return td_output
 
-        if len(properties.keys()) > 1:
-            properties = {"type": "object", "properties": properties}
-        return properties
+def create_input(endpoint):
+    if isinstance(endpoint["input"], bool) and endpoint["input"]:
+        schema_url = "schema.rng"
+    elif isinstance(endpoint["input"], str):
+        schema_url = endpoint["input"]
+    url = "https://cpee.org/flow/resources/endpoints/"+escape_url(endpoint["url"], endpoint["profile"])+"/"+schema_url
+    
+    tree = etree.fromstring(requests.get(url).text)
+    data_objects = {}
+    if tree.getchildren()[0].tag == "{http://relaxng.org/ns/structure/1.0}element":
+        for element in tree:
+            data_objects.update(create_data_object(element))
+    else:
+        data_objects.update(create_data_object(tree))
 
-def create_property(element):
+    if len(data_objects.keys()) > 1:
+        data_objects = {"type": "object", "properties": data_objects}
+    return data_objects
+
+def create_data_object(element):
     relaxng_url = "{http://relaxng.org/ns/structure/1.0}"
-    name = ""
-    property = {}
+    data_object = {}
     if "name" in element.attrib:
         name = element.attrib["name"]
-        property.update({name: {}})
-        if "{http://rngui.org}label" in element.attrib:
-            property[name].update({"title": element.attrib["{http://rngui.org}label"]})
-    elif "{http://rngui.org}label" in element.attrib:
-        name = element.attrib["{http://rngui.org}label"]
-        property.update({name: {}})
     else:
-        name = "unnamed_element"
-        property.update({name: {}})
+        name = "unnamedElement"
+    data_object.update({name: {}})
+    if "{http://rngui.org}label" in element.attrib:
+        data_object[name].update({"title": element.attrib["{http://rngui.org}label"]})
+    elif "{http://rngui.org}header" in element.attrib:
+        data_object[name].update({"title": element.attrib["{http://rngui.org}header"]})
+    if "{http://rngui.org}default" in element.attrib:
+        data_object[name].update({"default": typecast_default(element.attrib["{http://rngui.org}default"])})
+    if "{http://rngui.org}hint" in element.attrib:
+        data_object[name].update({"hint": element.attrib["{http://rngui.org}hint"]})
+    
+    if name == "unnamedElement" and element.tag == relaxng_url+"data":
+        data_object[name].update(parse_data(element.attrib))
+        return data_object
 
     children_types = []
     for children in element.getchildren():
         children_types.append(children.tag)
-    if len(children_types) == 1 or relaxng_url+"data" in children_types:
+    if len(children_types) == 1 or len(children_types) == 2 and relaxng_url+"anyName" in children_types:
         index = 0
-        if element.getchildren()[0].tag == relaxng_url+"anyName":
-            index = 1
-        type = element.getchildren()[index].tag
-        if type == relaxng_url+"data":
-            if "type" in element.getchildren()[index].attrib:
-                if element.getchildren()[index].attrib["type"] in ["boolean","integer","string"]:
-                    property[name].update({"type": element.getchildren()[index].attrib["type"]})
-                elif element.getchildren()[index].attrib["type"] == "nonNegativeInteger":
-                    property[name].update({"type": "integer", "minimum": 0})
+        if relaxng_url+"anyName" in children_types:
+            data_object[name].update({"anyName": True})
+            if element.getchildren()[0].tag == relaxng_url+"anyName":
+                index = 1
 
+        element_type = element.getchildren()[index].tag
+        if element_type == relaxng_url+"data":
+            data_object[name].update(parse_data(element.getchildren()[index].attrib))
+        elif element_type == relaxng_url+"text":
+            data_object[name].update({"type": "string", "text": True})
             if "{http://rngui.org}label" in element.getchildren()[index].attrib:
-                property[name].update({"description": element.getchildren()[index].attrib["{http://rngui.org}label"]})
-        elif type == relaxng_url+"text":
-            property[name].update({"type": "string", "misc": "message"})
-            if "{http://rngui.org}label" in element.getchildren()[index].attrib:
-                property[name].update({"description": element.getchildren()[index].attrib["{http://rngui.org}label"]})
-        elif type == relaxng_url+"choice":
+                data_object[name].update({"description": element.getchildren()[index].attrib["{http://rngui.org}label"]})
+            if "{http://rngui.org}wrap" in element.getchildren()[index].attrib and element.getchildren()[index].attrib["{http://rngui.org}wrap"]:
+                data_object[name].update({"wrap": True})
+        elif element_type == relaxng_url+"choice":
             enum = []
             for value in element.getchildren()[index]:
                 enum.append(value.text)
-            property[name].update({"type": "string", "enum": enum})
-        elif type == relaxng_url+"zeroOrMore":
-            property[name].update({"type": "array", "items": {}})
+            data_object[name].update({"type": "string", "enum": enum})
+        elif element_type == relaxng_url+"attribute":
+            data_object[name].update(create_data_object(element.getchildren()[index].attrib))
+        elif element_type == relaxng_url+"zeroOrMore":
+            data_object[name].update({"type": "array", "items": {}})
             if element.getchildren()[index].getchildren()[0].tag == relaxng_url+"element":
-                array_items = create_property(element.getchildren()[index].getchildren()[0])
-                property[name]["items"] = array_items
+                array_items = create_data_object(element.getchildren()[index].getchildren()[0])
+                data_object[name]["items"] = list(array_items.values())[0]
 
             if "{http://rngui.org}label" in element.getchildren()[index].attrib:
-                property[name].update({"description": element.getchildren()[index].attrib["{http://rngui.org}label"]})
+                data_object[name].update({"description": element.getchildren()[index].attrib["{http://rngui.org}label"]})
 
     elif len(element.getchildren()) > 1:
-        property[name].update({"type": "object", "properties": {}})
+        data_object[name].update({"type": "object", "properties": {}})
         for child_element in element.getchildren():
-            latest_element = create_property(child_element)
+            latest_element = create_data_object(child_element)
             child_key, child_value = list(latest_element.items())[0]
-            if child_key in property[name]["properties"].keys():
+            if child_key in data_object[name]["properties"].keys():
                 index = 1
-                while child_key+"_"+str(index) in property[name]["properties"].keys():
+                while child_key+"_"+str(index) in data_object[name]["properties"].keys():
                     index += 1
                 latest_element[child_key+"_"+str(index)] = latest_element.pop(child_key)
-            property[name]["properties"].update(latest_element)
+            data_object[name]["properties"].update(latest_element)
       
-    return property
+    return data_object
+
+def parse_data(data_element):
+    data_object = {}
+    if "type" in data_element:
+        if data_element["type"] in ["boolean","integer","string"]:
+            data_object.update({"type": data_element["type"]})
+        elif data_element["type"] == "float":
+            data_object.update({"type": "number"})
+        elif data_element["type"] == "nonNegativeInteger":
+            data_object.update({"type": "integer", "minimum": 0})
+
+    if "{http://rngui.org}label" in data_element:
+        data_object.update({"description": data_element["{http://rngui.org}label"]})
+    return data_object

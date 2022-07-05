@@ -80,6 +80,15 @@ def check_endpoint(tpbm_endpoint, previous_endpoint_names):
     if "icon" in tpbm_endpoint and not isinstance(tpbm_endpoint["icon"], (str, bool)):
         response += "\nERROR: " + name + "If indicated, icon has to be of boolean type"
 
-    if "event" in tpbm_endpoint and not isinstance(tpbm_endpoint["event"], bool):
-        response += "\nERROR: " + name + "If indicated, event has to be of boolean type"
+    if "async" in tpbm_endpoint and not isinstance(tpbm_endpoint["async"], bool):
+        response += "\nERROR: " + name + "If indicated, async has to be of boolean type"
+
+    if "miscFiles" in tpbm_endpoint:
+        if not isinstance(tpbm_endpoint["miscFiles"], (str, list)):
+            response += "\nERROR: " + name + "If indicated, miscFiles has to be of string of array type"
+        elif isinstance(tpbm_endpoint["miscFiles"], list):
+            for misc_file in tpbm_endpoint["miscFiles"]:
+                if not isinstance(misc_file, str):
+                    response += "\nERROR: " + name + "miscFiles includes an element that is not of array type"
+                break
     return response
