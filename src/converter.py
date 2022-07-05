@@ -45,7 +45,7 @@ def add_endpoint(endpoint, thing_description):
             if isinstance(endpoint["input"], str) or isinstance(endpoint["input"], bool) and endpoint["input"]:
                 thing_description["actions"][name].update({"input": create_input(endpoint)})
         if "output" in endpoint and endpoint["profile"] != "symbolic":
-            thing_description["events"][name].update({"output": create_output(endpoint["output"])})
+            thing_description["actions"][name].update({"output": create_output(endpoint["output"])})
         thing_description["actions"][name].update(create_optionals(endpoint))
 
     elif endpoint["async"]:
@@ -109,11 +109,13 @@ def create_input(endpoint):
         data_objects = {"type": "object", "properties": data_objects}
     return data_objects
 
-def create_data_object(element):
+def create_data_object(element, head_name = False):
     relaxng_url = "{http://relaxng.org/ns/structure/1.0}"
     data_object = {}
     if "name" in element.attrib:
         name = element.attrib["name"]
+    elif head_name:
+        name = head_name
     else:
         name = "unnamedElement"
     data_object.update({name: {}})
@@ -125,8 +127,10 @@ def create_data_object(element):
         data_object[name].update({"default": typecast_default(element.attrib["{http://rngui.org}default"])})
     if "{http://rngui.org}hint" in element.attrib:
         data_object[name].update({"hint": element.attrib["{http://rngui.org}hint"]})
+    if element.tag == relaxng_url+"attribute":
+        data_object[name].update({"attribute": True})    
     
-    if name == "unnamedElement" and element.tag == relaxng_url+"data":
+    if head_name or name == "unnamedElement" and element.tag == relaxng_url+"data":
         data_object[name].update(parse_data(element.attrib))
         return data_object
 
@@ -156,6 +160,7 @@ def create_data_object(element):
             data_object[name].update({"type": "string", "enum": enum})
         elif element_type == relaxng_url+"attribute":
             data_object[name].update(create_data_object(element.getchildren()[index].attrib))
+            data_object[name] = {"attribute": True}
         elif element_type == relaxng_url+"zeroOrMore":
             data_object[name].update({"type": "array", "items": {}})
             if element.getchildren()[index].getchildren()[0].tag == relaxng_url+"element":
@@ -168,7 +173,10 @@ def create_data_object(element):
     elif len(element.getchildren()) > 1:
         data_object[name].update({"type": "object", "properties": {}})
         for child_element in element.getchildren():
-            latest_element = create_data_object(child_element)
+            if child_element.tag == relaxng_url+"data" and name != "unnamedElement":
+                latest_element = create_data_object(child_element, name)
+            else:
+                latest_element = create_data_object(child_element)
             child_key, child_value = list(latest_element.items())[0]
             if child_key in data_object[name]["properties"].keys():
                 index = 1
