@@ -47,7 +47,7 @@ Run the flask app with `flask run`. Communicate with the locally running API usi
             <td>Further inner nodes are located under this node</td>
         </tr>
         <tr>
-            <td colspan=2><center><i>or</i></center></td>
+            <td colspan=2 style="text-align:center"><i>or</i></td>
         </tr>
         <tr>
             <td>Array of <i>EndpointModel</i></td>
@@ -62,7 +62,7 @@ Run the flask app with `flask run`. Communicate with the locally running API usi
 |name|mandatory|string|The name of the endpoint, has to be unique for all endpoints on the same level|
 |url|mandatory|string|Location of the task in the CPEE endpoint repository|
 |profile|mandatory|enum (one of delete, get, patch, post, put, symbolic, none)|HTTP method or special behavior profile used for the endpoint|
-|input|optional|boolean or string|ndicates the presence of the default CPEE schema file (schema.rng) or a custom named file name to be used|
+|input|optional|boolean or string|Indicates the presence of the default CPEE schema file (schema.rng) or a custom named file name to be used|
 |icon|optional|boolean or string|Indicates the presence of the default CPEE icon file (symbol.svg) or a custom named file name to be used|
 |output|optional|string or Array of strings|Indicates the served output of the endpoint through a media type or a sequence of media types|
 |async|optional|boolean|Indicates whether the endpoint output is sent in an asynchronous way|
