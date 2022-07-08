@@ -29,40 +29,58 @@ Run the flask app with `flask run`. Communicate with the locally running API usi
 
 ## Model Syntax
 ### Data Model
-#### MainModel
-|Attribute|Assignment|Type|Description|
-|-|-|-|-|
-|title|mandatory|string|The name of the TPBM<mark>, to be transferred to the generated Thing Description</mark>|
-|endpoints|mandatory|Array of EndpointModel|The endpoints listed in the TPBM.|
+#### InnerModel
+<table>
+    <thead>
+        <tr>
+            <th>Key</th>
+            <th>Key meaning</th>
+            <th>Value</th>
+		    <th>Value meaning</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td rowspan=3>name</td>
+            <td rowspan=3>The name of the inner node in the TPBM’s tree model</td>
+            <td>Map of <i>InnerModel</i></td>
+            <td>Further inner nodes are located under this node</td>
+        </tr>
+        <tr>
+            <td colspan=2><center><i>or</i></center></td>
+        </tr>
+        <tr>
+            <td>Array of <i>EndpointModel</i></td>
+            <td>A set of endpoints is located under this node</td>
+        </tr>
+    </tbody>
+</table>
+
 #### EndpointModel
 |Attribute|Assignment|Type|Description|
 |-|-|-|-|
-|name|optional, yet recommended|string|The name of the endpoint. If not indicated, it is generated from the last part of the url|
-|url|mandatory|string|Location of the task in the task repository|
-|profile|mandatory|enum (one of delete, get, patch, post, put, get-put, symbolic, none)|HTTP request method or special behavior profile (get-put, symbolic, none; explanation below) used for the endpoint|
-|input|optional|boolean or string|Indicates the presence of the default CPEE icon file (symbol.svg) or a customized file name to be used|
-|icon|optional|boolean or string|Indicates the presence of the default CPEE icon file (symbol.svg) or a customized file name to be used|
-|output|optional|any|Indicates the output produced by the endpoint|
-|event|optional|boolean|Indicates the presence on an event caused by the endpoint|
-|misc|optional|any|Option for miscellaneous information to be included in the Thing Description|
-
-
-
+|name|mandatory|string|The name of the endpoint, has to be unique for all endpoints on the same level|
+|url|mandatory|string|Location of the task in the CPEE endpoint repository|
+|profile|mandatory|enum (one of delete, get, patch, post, put, symbolic, none)|HTTP method or special behavior profile used for the endpoint|
+|input|optional|boolean or string|ndicates the presence of the default CPEE schema file (schema.rng) or a custom named file name to be used|
+|icon|optional|boolean or string|Indicates the presence of the default CPEE icon file (symbol.svg) or a custom named file name to be used|
+|output|optional|string or Array of strings|Indicates the served output of the endpoint through a media type or a sequence of media types|
+|async|optional|boolean|Indicates whether the endpoint output is sent in an asynchronous way|
+|miscFiles|optional|string or Array of strings|Indicates miscellaneous files that are present in the endpoint repository entry|
 ### TPBM Example
 ```json
 {
-	"title":"centurio",
-	"endpoints":[
-		{
-			"name":"write",
-			"url":"https://centurio.work/ing/opcua/write/",
-			"profile":"put",
-			"input":"schema.rng",
-			"icon":"symbol.svg",
-			"output":"json",
-			"event":false,
-			"misc":"Something"
-		}
-	]
+   "centurio":[
+      {
+         "name":"write",
+         "url":"https://centurio.work/ing/opcua/write/",
+         "profile":"put",
+         "input":"schema.rng",
+         "icon":"symbol.svg",
+         "output":"application/json",
+         "async":false,
+         "miscFiles":"contents.json"
+      }
+   ]
 }
 ```

@@ -107,6 +107,8 @@ def create_input(endpoint):
 
     if len(data_objects.keys()) > 1:
         data_objects = {"type": "object", "properties": data_objects}
+    else:
+        data_objects = list(data_objects.values())[0]
     return data_objects
 
 def create_data_object(element, head_name = False):
