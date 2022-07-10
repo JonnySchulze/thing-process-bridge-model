@@ -1,9 +1,11 @@
-from src.utils import escape_url, typecast_default
+from src.utils import escape_url, typecast
 from lxml import etree
 import requests
 from copy import deepcopy
 
-default_thing_description = {"@context": "http://www.w3.org/ns/td",
+default_thing_description = {"@context": ["http://www.w3.org/ns/td", 
+    {"tpbm": "https://github.com/JonnySchulze/thing-process-bridge-model"},
+    {"schema": "https://cpee.org/flow/resources/endpoints"}],
     "securityDefinitions": {"no_sec" : {"scheme":"nosec","in":"header"}},
     "security":"no_sec"}
 
@@ -24,7 +26,8 @@ def iterate_tpbm(input, id):
         return thing_descriptions
     elif isinstance(input, list):
         thing_description = deepcopy(default_thing_description)
-        thing_description.update({"id": id})
+        title = id.rsplit(':', 1)[-1] or id
+        thing_description.update({"title": title, "id": id})
         for endpoint in input:
             thing_description = add_endpoint(endpoint, thing_description)
         return thing_description
@@ -67,16 +70,16 @@ def create_optionals(endpoint):
     optionals = {}
     if "icon" in endpoint:
         if isinstance(endpoint["icon"], str):
-            optionals.update({"icon": endpoint["icon"]})
+            optionals.update({"tpbm:icon": endpoint["icon"]})
         elif endpoint["icon"]:
-            optionals.update({"icon": "symbol.svg"})
+            optionals.update({"tpbm:icon": "symbol.svg"})
 
     if "input" in endpoint and isinstance(endpoint["input"], str):
         if endpoint["input"] != "schema.rng":
-            optionals.update({"schemaName": endpoint["input"]})
+            optionals.update({"tpbm:schemaName": endpoint["input"]})
 
     if "miscFiles" in endpoint:
-        optionals.update({"miscFiles": endpoint["miscFiles"]})
+        optionals.update({"tpbm:miscFiles": endpoint["miscFiles"]})
     return optionals
 
 def create_output(output):
@@ -126,9 +129,9 @@ def create_data_object(element, head_name = False):
     elif "{http://rngui.org}header" in element.attrib:
         data_object[name].update({"title": element.attrib["{http://rngui.org}header"]})
     if "{http://rngui.org}default" in element.attrib:
-        data_object[name].update({"default": typecast_default(element.attrib["{http://rngui.org}default"])})
+        data_object[name].update({"default": typecast(element.attrib["{http://rngui.org}default"])})
     if "{http://rngui.org}hint" in element.attrib:
-        data_object[name].update({"hint": element.attrib["{http://rngui.org}hint"]})
+        data_object[name].update({"schema:hint": element.attrib["{http://rngui.org}hint"]})
     if element.tag == relaxng_url+"attribute":
         data_object[name].update({"attribute": True})    
     
@@ -142,7 +145,7 @@ def create_data_object(element, head_name = False):
     if len(children_types) == 1 or len(children_types) == 2 and relaxng_url+"anyName" in children_types:
         index = 0
         if relaxng_url+"anyName" in children_types:
-            data_object[name].update({"anyName": True})
+            data_object[name].update({"schema:anyName": True})
             if element.getchildren()[0].tag == relaxng_url+"anyName":
                 index = 1
 
@@ -154,15 +157,16 @@ def create_data_object(element, head_name = False):
             if "{http://rngui.org}label" in element.getchildren()[index].attrib:
                 data_object[name].update({"description": element.getchildren()[index].attrib["{http://rngui.org}label"]})
             if "{http://rngui.org}wrap" in element.getchildren()[index].attrib and element.getchildren()[index].attrib["{http://rngui.org}wrap"]:
-                data_object[name].update({"wrap": True})
+                data_object[name].update({"schema:wrap": True})
         elif element_type == relaxng_url+"choice":
             enum = []
             for value in element.getchildren()[index]:
-                enum.append(value.text)
-            data_object[name].update({"type": "string", "enum": enum})
+                enum.append(typecast(value.text))
+            data_object[name].update({"enum": enum})
+            data_object[name].update({"type": get_enum_type(data_object, name)})
         elif element_type == relaxng_url+"attribute":
             data_object[name].update(create_data_object(element.getchildren()[index].attrib))
-            data_object[name] = {"attribute": True}
+            data_object[name] = {"schema:attribute": True}
         elif element_type == relaxng_url+"zeroOrMore":
             data_object[name].update({"type": "array", "items": {}})
             if element.getchildren()[index].getchildren()[0].tag == relaxng_url+"element":
@@ -202,3 +206,19 @@ def parse_data(data_element):
     if "{http://rngui.org}label" in data_element:
         data_object.update({"description": data_element["{http://rngui.org}label"]})
     return data_object
+
+def get_enum_type(data_object, name):
+    data_types = []
+    if "default" in data_object[name]:
+        data_types.append(str(type(data_object[name]["default"])))
+    for enum_entry in data_object[name]["enum"]:
+        data_types.append(str(type(enum_entry)))
+    most_frequent_type = max(set(data_types), key = data_types.count)
+    if most_frequent_type == "<class 'str'>":
+        return "string"
+    elif most_frequent_type == "<class 'int'>":
+        return "integer"
+    elif most_frequent_type == "<class 'float'>":
+        return "number"
+    else:
+        return "bool"

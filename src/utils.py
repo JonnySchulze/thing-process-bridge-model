@@ -15,7 +15,7 @@ def check_for_media_type(input):
         return comp[0] in ["application", "audio", "font", "image", "model", "text", "video", "message"]
     return False
 
-def typecast_default(input):
+def typecast(input):
     # Boolean
     if input in ["True", "true"]:
         return True
