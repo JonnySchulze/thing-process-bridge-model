@@ -44,14 +44,14 @@ Run the flask app with `flask run`. Communicate with the locally running API usi
             <td rowspan=3>name</td>
             <td rowspan=3>The name of the inner node in the TPBM’s tree model</td>
             <td>Map of <i>InnerModel</i></td>
-            <td>Further inner nodes are located under this node</td>
+            <td>Further inner nodes are nested in this node</td>
         </tr>
         <tr>
             <td colspan=2 style="text-align:center"><i>or</i></td>
         </tr>
         <tr>
             <td>Array of <i>EndpointModel</i></td>
-            <td>A set of endpoints is located under this node</td>
+            <td>A set of endpoints is nested in this node</td>
         </tr>
     </tbody>
 </table>

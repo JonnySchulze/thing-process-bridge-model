@@ -1,7 +1,7 @@
 from src.utils import check_for_media_type
 
 def check(tpbm):
-    result = "Syntax Check Result:"
+    result = "\nSyntax Check Result:"
     if not isinstance(tpbm, dict):
         result += "\nERROR: The top level of a TPBM must be an object"
     elif len(list(tpbm.keys())) != 1:

@@ -3,10 +3,10 @@ from lxml import etree
 import requests
 from copy import deepcopy
 
-default_thing_description = {"@context": ["http://www.w3.org/ns/td", 
-    {"tpbm": "https://github.com/JonnySchulze/thing-process-bridge-model"},
-    {"schema": "https://cpee.org/flow/resources/endpoints"}],
-    "securityDefinitions": {"no_sec" : {"scheme":"nosec","in":"header"}},
+default_thing_description = {"@context": ["https://www.w3.org/2022/wot/td/v1.1", 
+    {"tpbm": "https://github.com/JonnySchulze/thing-process-bridge-model",
+    "schema": "https://cpee.org/flow/resources/endpoints"}],
+    "securityDefinitions": {"no_sec" : {"scheme":"nosec"}},
     "security":"no_sec"}
 
 def get_thing_descriptions_from_tpbm(tpbm):
@@ -35,34 +35,48 @@ def iterate_tpbm(input, id):
 def add_endpoint(endpoint, thing_description):
     name = endpoint["name"]
     if not "async" in endpoint or not endpoint["async"]:
-        if not "actions" in thing_description:
-            thing_description.update({"actions": {}})
+        affordance_used = "action"
+    else:
+        affordance_used = "event"
+
+    if not affordance_used in thing_description:
+            thing_description.update({affordance_used+"s": {}})
+
+    if affordance_used == "action":    
         idempotent = endpoint["profile"] in ["delete", "get", "put", "symbolic"]
         safe = endpoint["profile"] in ["get", "symbolic"]
-        thing_description["actions"].update({name:{"safe":safe,
-            "idempotent":idempotent, "forms":[{"href":endpoint["url"],"op":["invokeaction"],"contentType":"application/json"}]}})
-        if not endpoint["profile"] in ["none", "symbolic"]:
-            thing_description["actions"][name]["forms"][0].update({"htv:methodName": endpoint["profile"].upper()})
+        thing_description["actions"].update({name:{"safe":safe,"idempotent":idempotent,"forms":[{"op":["invokeaction"]}]}})
+    else:
+        if endpoint["profile"] != "delete":
+            op = "subscribeevent"
+        else:
+            op = "unsubscribeevent"
+        thing_description["events"].update({name:{"forms":[{"op":[op]}]}})
 
-        if "input" in endpoint:
-            if isinstance(endpoint["input"], str) or isinstance(endpoint["input"], bool) and endpoint["input"]:
-                thing_description["actions"][name].update({"input": create_input(endpoint)})
-        if "output" in endpoint and endpoint["profile"] != "symbolic":
+    thing_description[affordance_used+"s"][name]["forms"][0].update({"href":endpoint["url"],"contentType":"application/x-www-form-urlencoded"})
+    if not endpoint["profile"] in ["none", "symbolic"]:
+            thing_description[affordance_used+"s"][name]["forms"][0].update({"htv:methodName": endpoint["profile"].upper()})
+
+    if "input" in endpoint:
+        if isinstance(endpoint["input"], str) or isinstance(endpoint["input"], bool) and endpoint["input"]:
+            input, file_found = create_input(endpoint)
+            if file_found:
+                thing_description[affordance_used+"s"][name]["forms"][0]["contentType"] = "multipart/form-data"
+            if affordance_used == "action":
+                input_param = "input"
+            elif endpoint["profile"] != "delete":
+                input_param = "subscription"
+            else:
+                input_param = "unsubscription"
+            thing_description[affordance_used+"s"][name].update({input_param: input})
+                
+    if "output" in endpoint and endpoint["profile"] != "symbolic":
+        if affordance_used == "action":
             thing_description["actions"][name].update({"output": create_output(endpoint["output"])})
-        thing_description["actions"][name].update(create_optionals(endpoint))
-
-    elif endpoint["async"]:
-        if not "events" in thing_description:
-            thing_description.update({"events": {}})
-        thing_description["events"].update({name:{"forms":[{"href":endpoint["url"],"op":["subscribeevent"],"contentType":"application/json"}]}})
-        if not endpoint["profile"] in ["none", "symbolic"]:
-            thing_description["events"][name]["forms"][0].update({"htv:methodName": endpoint["profile"].upper()})
-        if "input" in endpoint:
-            if isinstance(endpoint["input"], str) or isinstance(endpoint["input"], bool) and endpoint["input"]:
-                thing_description["events"][name].update({"subscription": create_input(endpoint)})
-        if "output" in endpoint and endpoint["profile"] != "symbolic":
+        else:
             thing_description["events"][name].update({"data": create_output(endpoint["output"])})
-        thing_description["events"][name].update(create_optionals(endpoint))
+
+    thing_description[affordance_used+"s"][name].update(create_optionals(endpoint))
 
     return thing_description
 
@@ -102,21 +116,30 @@ def create_input(endpoint):
     
     tree = etree.fromstring(requests.get(url).text)
     data_objects = {}
+    file_found = False
     if tree.getchildren()[0].tag == "{http://relaxng.org/ns/structure/1.0}element":
         for element in tree:
-            data_objects.update(create_data_object(element))
+            if element.tag != "{http://relaxng.org/ns/structure/1.0}optional":
+                data_object, file_found_object = create_data_object(element)
+            else:
+                data_object, file_found_object = create_data_object(element.getchildren()[0], False, True)
+            data_objects.update(data_object)
+            file_found = file_found or file_found_object
     else:
-        data_objects.update(create_data_object(tree))
+        data_object, file_found_object = create_data_object(tree)
+        data_objects.update(data_object)
+        file_found = file_found or file_found_object
 
     if len(data_objects.keys()) > 1:
         data_objects = {"type": "object", "properties": data_objects}
     else:
         data_objects = list(data_objects.values())[0]
-    return data_objects
+    return data_objects, file_found
 
-def create_data_object(element, head_name = False):
+def create_data_object(element, head_name = False, optional = False):
     relaxng_url = "{http://relaxng.org/ns/structure/1.0}"
     data_object = {}
+    file_found = False
     if "name" in element.attrib:
         name = element.attrib["name"]
     elif head_name:
@@ -133,11 +156,13 @@ def create_data_object(element, head_name = False):
     if "{http://rngui.org}hint" in element.attrib:
         data_object[name].update({"schema:hint": element.attrib["{http://rngui.org}hint"]})
     if element.tag == relaxng_url+"attribute":
-        data_object[name].update({"attribute": True})    
+        data_object[name].update({"schema:attribute": True})
+    if optional:
+         data_object[name].update({"schema:optional": True}) 
     
     if head_name or name == "unnamedElement" and element.tag == relaxng_url+"data":
         data_object[name].update(parse_data(element.attrib))
-        return data_object
+        return data_object, file_found
 
     children_types = []
     for children in element.getchildren():
@@ -153,7 +178,7 @@ def create_data_object(element, head_name = False):
         if element_type == relaxng_url+"data":
             data_object[name].update(parse_data(element.getchildren()[index].attrib))
         elif element_type == relaxng_url+"text":
-            data_object[name].update({"type": "string", "text": True})
+            data_object[name].update({"type": "string", "schema:text": True})
             if "{http://rngui.org}label" in element.getchildren()[index].attrib:
                 data_object[name].update({"description": element.getchildren()[index].attrib["{http://rngui.org}label"]})
             if "{http://rngui.org}wrap" in element.getchildren()[index].attrib and element.getchildren()[index].attrib["{http://rngui.org}wrap"]:
@@ -165,12 +190,15 @@ def create_data_object(element, head_name = False):
             data_object[name].update({"enum": enum})
             data_object[name].update({"type": get_enum_type(data_object, name)})
         elif element_type == relaxng_url+"attribute":
-            data_object[name].update(create_data_object(element.getchildren()[index].attrib))
-            data_object[name] = {"schema:attribute": True}
+            child_element, child_file_found = create_data_object(element.getchildren()[index].attrib)
+            data_object[name].update(child_element)
+            data_object[name].update({"schema:attribute": True})
+            file_found = file_found or child_file_found
         elif element_type == relaxng_url+"zeroOrMore":
             data_object[name].update({"type": "array", "items": {}})
             if element.getchildren()[index].getchildren()[0].tag == relaxng_url+"element":
-                array_items = create_data_object(element.getchildren()[index].getchildren()[0])
+                array_items, file_found_child = create_data_object(element.getchildren()[index].getchildren()[0])
+                file_found = file_found or child_file_found
                 data_object[name]["items"] = list(array_items.values())[0]
 
             if "{http://rngui.org}label" in element.getchildren()[index].attrib:
@@ -180,9 +208,10 @@ def create_data_object(element, head_name = False):
         data_object[name].update({"type": "object", "properties": {}})
         for child_element in element.getchildren():
             if child_element.tag == relaxng_url+"data" and name != "unnamedElement":
-                latest_element = create_data_object(child_element, name)
+                latest_element, child_file_found = create_data_object(child_element, name, False)
             else:
-                latest_element = create_data_object(child_element)
+                latest_element, child_file_found = create_data_object(child_element)
+            file_found = file_found or child_file_found
             child_key, child_value = list(latest_element.items())[0]
             if child_key in data_object[name]["properties"].keys():
                 index = 1
@@ -191,7 +220,7 @@ def create_data_object(element, head_name = False):
                 latest_element[child_key+"_"+str(index)] = latest_element.pop(child_key)
             data_object[name]["properties"].update(latest_element)
       
-    return data_object
+    return data_object, file_found
 
 def parse_data(data_element):
     data_object = {}
