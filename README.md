@@ -3,7 +3,7 @@
 
 ## Introduction
 
-The **Thing Process Bridge Model** (TPBM) is an intermediary format to process endpoints and schema RelaxNG files used with the **[Cloud Process Execution Engine](https://cpee.org/)** (CPEE) and create [W3C Web of Things-correspondend **Thing Descriptions**](https://www.w3.org/TR/wot-thing-description11/) (TD).
+The **Thing Process Bridge Model** (TPBM) is an intermediary format to process endpoints and schema RelaxNG files used with the **[Cloud Process Execution Engine](https://cpee.org/)** (CPEE) and generate [W3C Web of Things-correspondend **Thing Descriptions**](https://www.w3.org/TR/wot-thing-description11/) (TD).
 Endpoints (mainly consisting of a URL and an HTTP request method) are used to access information about tasks that appear in processes running in the CPEE. Since the repositories and schema files used to store task information are only proprietary, the TPBM helps translate this information into equivalent Thing Descriptions.
 
 ## Requirements
@@ -70,17 +70,56 @@ Run the flask app with `flask run`. Communicate with the locally running API usi
 ### TPBM Example
 ```json
 {
-   "centurio":[
+   "endpoints":[
       {
          "name":"write",
-         "url":"https://centurio.work/ing/opcua/write/",
-         "profile":"put",
+         "url":"http://cpee.org/services/timeout.php",
+         "profile":"none",
          "input":"schema.rng",
          "icon":"symbol.svg",
-         "output":"application/json",
-         "async":false,
-         "miscFiles":"contents.json"
+         "async":false
       }
    ]
+}
+```
+### Generated Thing Description
+```json
+{
+    "@context": [
+        "https://www.w3.org/2022/wot/td/v1.1",
+        {
+            "schema": "https://github.com/JonnySchulze/thing-process-bridge-model/blob/main/context-extensions/schema.md",
+            "tpbm": "https://github.com/JonnySchulze/thing-process-bridge-model/blob/main/context-extensions/tpbm.md"
+        }
+    ],
+    "actions": {
+        "write": {
+            "forms": [
+                {
+                    "contentType": "application/x-www-form-urlencoded",
+                    "href": "http://cpee.org/services/timeout.php",
+                    "op": [
+                        "invokeaction"
+                    ]
+                }
+            ],
+            "idempotent": false,
+            "input": {
+                "description": "duration in seconds",
+                "title": "Duration",
+                "type": "integer"
+            },
+            "safe": false,
+            "tpbm:icon": "symbol.svg"
+        }
+    },
+    "id": "endpoints",
+    "security": "no_sec",
+    "securityDefinitions": {
+        "no_sec": {
+            "scheme": "nosec"
+        }
+    },
+    "title": "endpoints"
 }
 ```
