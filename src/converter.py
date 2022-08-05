@@ -4,8 +4,8 @@ import requests
 from copy import deepcopy
 
 default_thing_description = {"@context": ["https://www.w3.org/2022/wot/td/v1.1", 
-    {"tpbm": "https://github.com/JonnySchulze/thing-process-bridge-model",
-    "schema": "https://cpee.org/flow/resources/endpoints"}],
+    {"tpbm": "https://github.com/JonnySchulze/thing-process-bridge-model/blob/main/context-extensions/tpbm.md",
+    "schema": "https://github.com/JonnySchulze/thing-process-bridge-model/blob/main/context-extensions/schema.md"}],
     "securityDefinitions": {"no_sec" : {"scheme":"nosec"}},
     "security":"no_sec"}
 
@@ -59,9 +59,16 @@ def add_endpoint(endpoint, thing_description):
 
     if "input" in endpoint:
         if isinstance(endpoint["input"], str) or isinstance(endpoint["input"], bool) and endpoint["input"]:
-            input, file_found = create_input(endpoint)
-            if file_found:
+            input = create_input(endpoint)
+            if input["type"] == "array":
                 thing_description[affordance_used+"s"][name]["forms"][0]["contentType"] = "multipart/form-data"
+            elif input["type"] == "object":
+                print(input["properties"].values())
+                for argument in input["properties"].values():
+                    print(argument)
+                    if argument["type"] in ["object", "array"]:
+                        thing_description[affordance_used+"s"][name]["forms"][0]["contentType"] = "multipart/form-data"
+                        break
             if affordance_used == "action":
                 input_param = "input"
             elif endpoint["profile"] != "delete":
@@ -116,30 +123,26 @@ def create_input(endpoint):
     
     tree = etree.fromstring(requests.get(url).text)
     data_objects = {}
-    file_found = False
     if tree.getchildren()[0].tag == "{http://relaxng.org/ns/structure/1.0}element":
         for element in tree:
             if element.tag != "{http://relaxng.org/ns/structure/1.0}optional":
-                data_object, file_found_object = create_data_object(element)
+                data_object = create_data_object(element)
             else:
-                data_object, file_found_object = create_data_object(element.getchildren()[0], False, True)
+                data_object = create_data_object(element.getchildren()[0], False, True)
             data_objects.update(data_object)
-            file_found = file_found or file_found_object
     else:
-        data_object, file_found_object = create_data_object(tree)
+        data_object = create_data_object(tree)
         data_objects.update(data_object)
-        file_found = file_found or file_found_object
 
     if len(data_objects.keys()) > 1:
         data_objects = {"type": "object", "properties": data_objects}
     else:
         data_objects = list(data_objects.values())[0]
-    return data_objects, file_found
+    return data_objects
 
 def create_data_object(element, head_name = False, optional = False):
     relaxng_url = "{http://relaxng.org/ns/structure/1.0}"
     data_object = {}
-    file_found = False
     if "name" in element.attrib:
         name = element.attrib["name"]
     elif head_name:
@@ -162,7 +165,7 @@ def create_data_object(element, head_name = False, optional = False):
     
     if head_name or name == "unnamedElement" and element.tag == relaxng_url+"data":
         data_object[name].update(parse_data(element.attrib))
-        return data_object, file_found
+        return data_object
 
     children_types = []
     for children in element.getchildren():
@@ -190,15 +193,13 @@ def create_data_object(element, head_name = False, optional = False):
             data_object[name].update({"enum": enum})
             data_object[name].update({"type": get_enum_type(data_object, name)})
         elif element_type == relaxng_url+"attribute":
-            child_element, child_file_found = create_data_object(element.getchildren()[index].attrib)
+            child_element = create_data_object(element.getchildren()[index].attrib)
             data_object[name].update(child_element)
             data_object[name].update({"schema:attribute": True})
-            file_found = file_found or child_file_found
         elif element_type == relaxng_url+"zeroOrMore":
             data_object[name].update({"type": "array", "items": {}})
             if element.getchildren()[index].getchildren()[0].tag == relaxng_url+"element":
-                array_items, file_found_child = create_data_object(element.getchildren()[index].getchildren()[0])
-                file_found = file_found or child_file_found
+                array_items = create_data_object(element.getchildren()[index].getchildren()[0])
                 data_object[name]["items"] = list(array_items.values())[0]
 
             if "{http://rngui.org}label" in element.getchildren()[index].attrib:
@@ -208,10 +209,9 @@ def create_data_object(element, head_name = False, optional = False):
         data_object[name].update({"type": "object", "properties": {}})
         for child_element in element.getchildren():
             if child_element.tag == relaxng_url+"data" and name != "unnamedElement":
-                latest_element, child_file_found = create_data_object(child_element, name, False)
+                latest_element = create_data_object(child_element, name, False)
             else:
-                latest_element, child_file_found = create_data_object(child_element)
-            file_found = file_found or child_file_found
+                latest_element = create_data_object(child_element)
             child_key, child_value = list(latest_element.items())[0]
             if child_key in data_object[name]["properties"].keys():
                 index = 1
@@ -220,7 +220,7 @@ def create_data_object(element, head_name = False, optional = False):
                 latest_element[child_key+"_"+str(index)] = latest_element.pop(child_key)
             data_object[name]["properties"].update(latest_element)
       
-    return data_object, file_found
+    return data_object
 
 def parse_data(data_element):
     data_object = {}
