@@ -63,9 +63,7 @@ def add_endpoint(endpoint, thing_description):
             if input["type"] == "array":
                 thing_description[affordance_used+"s"][name]["forms"][0]["contentType"] = "multipart/form-data"
             elif input["type"] == "object":
-                print(input["properties"].values())
                 for argument in input["properties"].values():
-                    print(argument)
                     if argument["type"] in ["object", "array"]:
                         thing_description[affordance_used+"s"][name]["forms"][0]["contentType"] = "multipart/form-data"
                         break
